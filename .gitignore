@@ -1,0 +1,35 @@
+# Dependency directories
+node_modules/
+**/node_modules/
+
+# Environments and Secrets
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Python Cache
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+
+# Build and distribution directories
+dist/
+build/
+out/
+
+# IDE / System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Recursive/Duplicate project folders
+learntrack/LearnTrack/
+LearnTrack (1)/
