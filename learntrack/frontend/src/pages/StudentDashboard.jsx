@@ -1,16 +1,32 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../supabaseClient'
-import Loading from '../components/Loading'
+import { Card, Pill, Progress, Icon, Button } from '../components/ui'
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
-export default function StudentDashboard({ onTakeQuiz }) {
+function StatCard({ icon, iconColor, label, value, sub }) {
+  return (
+    <Card className="p-5 flex items-center gap-4">
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${iconColor}`}>
+        <Icon className="text-xl">{icon}</Icon>
+      </div>
+      <div className="min-w-0">
+        <p className="text-2xl font-bold leading-none">{value}</p>
+        <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider mt-1">{label}</p>
+        {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+      </div>
+    </Card>
+  )
+}
+
+export default function StudentDashboard({ onTakeQuiz, onNavChange }) {
   const [dashboard, setDashboard] = useState(null)
   const [leaderboard, setLeaderboard] = useState([])
   const [activity, setActivity] = useState([])
   const [roadmap, setRoadmap] = useState([])
   const [myId, setMyId] = useState(null)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -25,180 +41,241 @@ export default function StudentDashboard({ onTakeQuiz }) {
         fetch(`${API_BASE}/student/activity`, { headers }),
         fetch(`${API_BASE}/student/roadmap`, { headers }),
       ])
-      if (!dashRes.ok || !lbRes.ok) {
-        setDashboard({ error: true })
-        return
-      }
+      if (!dashRes.ok) { setError(true); return }
       setDashboard(await dashRes.json())
-      setLeaderboard(await lbRes.json())
+      setLeaderboard(lbRes.ok ? await lbRes.json() : [])
       setActivity(actRes.ok ? await actRes.json() : [])
       setRoadmap(roadRes.ok ? await roadRes.json() : [])
     }
     load()
   }, [])
 
-  if (!dashboard) return <Loading text="Loading quest log..." />
-  if (dashboard.error) return <p className="font-body text-flame">Couldn't load your quest log. Try logging out and back in.</p>
+  if (!dashboard && !error) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-20 text-muted-foreground">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-sm">Loading dashboard…</span>
+      </div>
+    )
+  }
+  if (error) return <p className="p-6 text-danger text-sm">Couldn't load dashboard. Try logging out and back in.</p>
 
-  const level = Math.floor(dashboard.total_xp / 900) + 1
-  const xpPercent = Math.min((dashboard.total_xp % 900) / 900 * 100, 100)
   const rank = leaderboard.findIndex((r) => r.student_id === myId) + 1 || null
+  const quizzesAttempted = activity.length
+  const quizzesPassed = activity.filter(a => (a.score || 0) >= 60).length
+  const passRate = quizzesAttempted > 0 ? Math.round(quizzesPassed / quizzesAttempted * 100) : 0
+  const nextQuest = roadmap.find(q => q.status === 'current') || roadmap.find(q => q.status !== 'completed') || null
+  const completedCount = roadmap.filter(q => q.status === 'completed').length
 
   return (
-    <div className="grid grid-cols-3 gap-6 font-body">
+    <div className="space-y-6">
 
-      {/* Main column */}
-      <div className="col-span-2 space-y-6">
-
-        {/* Hero */}
-        <div className="game-panel p-6">
-          <div className="flex items-center gap-5">
-            <div className="xp-gem w-24 h-24 flex items-center justify-center shrink-0">
-              <div className="text-center">
-                <p className="font-stat text-2xl text-night font-bold leading-none">{dashboard.total_xp}</p>
-                <p className="font-stat text-[10px] text-night/70 tracking-widest">XP</p>
-              </div>
-            </div>
-            <div className="flex-1">
-              <p className="font-display text-2xl text-white">Level {level}</p>
-              {rank && <p className="font-stat text-cyan hud-glow">Rank #{rank} in class</p>}
-              <div className="h-3 bg-night rounded-full overflow-hidden mt-3 border border-violet/50">
-                <motion.div
-                  className="h-full bg-gradient-to-r from-cyan to-gold rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${xpPercent}%` }}
-                  transition={{ duration: 0.9, ease: 'easeOut' }}
-                />
-              </div>
-              <p className="text-xs text-white/40 mt-1">{Math.round(xpPercent)}% to Level {level + 1}</p>
-            </div>
-            <button
-              onClick={onTakeQuiz}
-              className="bg-gradient-to-r from-cyan to-violet text-white rounded-xl px-6 py-3 font-display text-lg shadow-lg shadow-cyan/20 active:scale-[0.98] transition shrink-0"
-            >
-              ⚔ Start a quest
-            </button>
+      {/* ── Welcome Banner ─────────────────────────────────── */}
+      <Card className="p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {completedCount > 0
+                ? `You've completed ${completedCount} assignment${completedCount !== 1 ? 's' : ''} so far. Keep going.`
+                : 'Get started by taking your first quiz below.'}
+            </p>
           </div>
-        </div>
-
-        {/* Stat HUD */}
-        <div className="grid grid-cols-3 gap-4">
-          <StatHud icon="🔥" label="streak" value={dashboard.streak} color="text-flame" />
-          <StatHud icon="🎖" label="badges" value={dashboard.badges.length} color="text-cyan" />
-          <StatHud icon="👑" label="rank" value={rank ?? '-'} color="text-gold" />
-        </div>
-
-        {/* Badges */}
-        <div className="game-panel p-6">
-          <p className="font-display text-white mb-4">Medallions earned</p>
-          {dashboard.badges.length === 0 ? (
-            <p className="text-sm text-white/40">Complete quests to start earning medallions.</p>
-          ) : (
-            <div className="flex flex-wrap gap-5">
-              {dashboard.badges.map((badge) => (
-                <div key={badge.badge_id} className="relative flex flex-col items-center medallion-ribbon">
-                  <div className="medallion w-14 h-14 flex items-center justify-center">
-                    <span className="text-xl">🎖</span>
-                  </div>
-                  <p className="text-[11px] text-white/70 mt-2 text-center max-w-[80px]">{badge.badges?.name}</p>
-                </div>
-              ))}
-            </div>
+          {nextQuest && (
+            <Button onClick={onTakeQuiz} className="shrink-0">
+              <Icon>play_circle</Icon> Start Next Quiz
+            </Button>
           )}
         </div>
+      </Card>
 
-        {/* Next up — ties back to the quest path */}
-        <div className="game-panel p-6">
-          <p className="font-display text-white mb-4">🗺 Next up on your path</p>
-          {roadmap.filter((q) => q.status !== 'completed').length === 0 ? (
-            <p className="text-sm text-white/40">You're all caught up — no quests left on your path!</p>
-          ) : (
-            <div className="space-y-2">
-              {roadmap.filter((q) => q.status !== 'completed').slice(0, 3).map((q) => (
-                <div key={q.id} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-white/[0.03]">
-                  <span className={`w-9 h-9 rounded-full flex items-center justify-center text-sm shrink-0 ${q.status === 'current' ? 'bg-gradient-to-br from-cyan to-violet' : 'bg-night2 border border-violet/30'
-                    }`}>
-                    {q.status === 'current' ? '⚔' : '🔒'}
-                  </span>
-                  <div>
-                    <p className={`text-sm ${q.status === 'current' ? 'text-cyan font-semibold' : 'text-white/50'}`}>{q.title}</p>
-                    <p className="text-xs text-white/30">{q.domain}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* ── Stats Row ──────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          icon="assignment_turned_in"
+          iconColor="bg-primary/10 text-primary"
+          label="Quizzes Taken"
+          value={quizzesAttempted}
+          sub="total attempts"
+        />
+        <StatCard
+          icon="trending_up"
+          iconColor="bg-emerald-500/10 text-emerald-600"
+          label="Pass Rate"
+          value={`${passRate}%`}
+          sub={`${quizzesPassed} of ${quizzesAttempted} passed`}
+        />
+        <StatCard
+          icon="military_tech"
+          iconColor="bg-amber-500/10 text-amber-600"
+          label="Badges Earned"
+          value={dashboard.badges?.length ?? 0}
+          sub="achievements unlocked"
+        />
+        <StatCard
+          icon="leaderboard"
+          iconColor="bg-violet-500/10 text-violet-600"
+          label="Class Rank"
+          value={rank ? `#${rank}` : '—'}
+          sub={rank ? `of ${leaderboard.length} students` : 'not yet ranked'}
+        />
       </div>
 
-      {/* Side column — leaderboard preview + recent activity */}
-      <div className="space-y-6">
-        <div className="game-panel p-5">
-          <p className="font-display text-white mb-3">🔥 Streak tracker</p>
-          <div className="flex justify-between">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <span
-                key={i}
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs ${i < Math.min(dashboard.streak, 7)
-                    ? 'bg-gradient-to-br from-flame to-gold text-white'
-                    : 'bg-night2 border border-violet/30 text-white/20'
-                  }`}
-              >
-                🔥
-              </span>
-            ))}
-          </div>
-          <p className="text-xs text-white/40 mt-2">
-            {dashboard.streak > 0 ? `${dashboard.streak}-day streak — keep it going!` : 'Complete a quest today to start a streak.'}
-          </p>
-        </div>
+      {/* ── Main Grid ──────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        <div className="game-panel p-5">
-          <p className="font-display text-white mb-3">🏆 Top champions</p>
-          {leaderboard.slice(0, 6).map((row, i) => {
-            const isMe = row.student_id === myId
-            return (
-              <div
-                key={row.student_id}
-                className={`flex justify-between items-center py-2 px-2 text-sm rounded-lg ${isMe ? 'bg-cyan/10 border border-cyan/40' : ''
-                  }`}
-              >
-                <span className="flex items-center gap-2">
-                  <span className="font-stat w-6 text-center text-gold font-bold">
-                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
-                  </span>
-                  <span className={isMe ? 'text-cyan font-semibold' : 'text-white/80'}>{row.name}</span>
-                </span>
-                <span className="font-stat text-gold text-sm">{row.total_xp}</span>
-              </div>
-            )
-          })}
-        </div>
+        {/* Left: Score progress + Upcoming quizzes */}
+        <div className="lg:col-span-2 space-y-6">
 
-        <div className="game-panel p-5">
-          <p className="font-display text-white mb-3">📖 Recent activity</p>
-          {activity.length === 0 ? (
-            <p className="text-sm text-white/40">No quests completed yet — go start one!</p>
-          ) : (
-            activity.map((a, i) => (
-              <div key={i} className="flex justify-between items-center py-2 px-2 text-sm border-b border-violet/20 last:border-0">
-                <span className="text-white/70 truncate">{a.quizzes?.topic || 'Quest'}</span>
-                <span className="font-stat text-cyan shrink-0 ml-2">{a.score} pts</span>
+          {/* Score summary */}
+          {activity.length > 0 && (
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-sm flex items-center gap-2">
+                  <Icon className="text-primary">insights</Icon> Score Breakdown
+                </h2>
+                <span className="text-xs text-muted-foreground">{quizzesAttempted} quiz{quizzesAttempted !== 1 ? 'zes' : ''}</span>
               </div>
-            ))
+              <div className="space-y-3">
+                {activity.slice(0, 5).map((a, i) => {
+                  const score = a.score ?? 0
+                  const pct = Math.min(score, 100)
+                  const tone = score >= 80 ? 'text-emerald-600' : score >= 60 ? 'text-amber-600' : 'text-danger'
+                  return (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground truncate w-36 shrink-0">{a.quizzes?.topic || 'Quiz'}</span>
+                      <div className="flex-1">
+                        <Progress value={pct} />
+                      </div>
+                      <span className={`text-xs font-bold w-10 text-right shrink-0 ${tone}`}>{score}%</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
           )}
+
+          {/* Upcoming assignments */}
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-sm flex items-center gap-2">
+                <Icon className="text-primary">queue</Icon> Upcoming Assignments
+              </h2>
+              {onNavChange && (
+                <button
+                  onClick={() => onNavChange('roadmap')}
+                  className="text-xs text-primary font-medium hover:underline border-0 bg-transparent cursor-pointer"
+                >
+                  View all →
+                </button>
+              )}
+            </div>
+            {roadmap.filter(q => q.status !== 'completed').length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Icon className="text-3xl mb-2 block">check_circle</Icon>
+                <p className="text-sm font-medium">All caught up!</p>
+                <p className="text-xs mt-1">No pending assignments.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {roadmap.filter(q => q.status !== 'completed').slice(0, 4).map((q) => (
+                  <div
+                    key={q.id}
+                    className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card hover:bg-secondary/30 transition-all"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs ${
+                        q.status === 'current' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        <Icon className="text-base">{q.status === 'current' ? 'play_arrow' : 'lock'}</Icon>
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-medium truncate ${q.status === 'current' ? 'text-foreground' : 'text-muted-foreground'}`}>{q.title}</p>
+                        <p className="text-xs text-muted-foreground">{q.domain}</p>
+                      </div>
+                    </div>
+                    {q.status === 'current' && (
+                      <Button size="sm" onClick={onTakeQuiz} className="ml-3 shrink-0">Start</Button>
+                    )}
+                    {q.status !== 'current' && (
+                      <Pill tone="gray">Locked</Pill>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Right: Leaderboard + Recent activity */}
+        <div className="space-y-6">
+
+          {/* Leaderboard top 5 */}
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-sm flex items-center gap-2">
+                <Icon className="text-amber-500">emoji_events</Icon> Top Students
+              </h2>
+              {onNavChange && (
+                <button
+                  onClick={() => onNavChange('leaderboard')}
+                  className="text-xs text-primary font-medium hover:underline border-0 bg-transparent cursor-pointer"
+                >
+                  See all
+                </button>
+              )}
+            </div>
+            {leaderboard.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">No scores yet.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {leaderboard.slice(0, 5).map((row, i) => {
+                  const isMe = row.student_id === myId
+                  const medal = i === 0 ? 'bg-amber-400 text-slate-900' : i === 1 ? 'bg-slate-300 text-slate-800' : i === 2 ? 'bg-amber-700 text-white' : 'bg-muted text-muted-foreground'
+                  return (
+                    <div
+                      key={row.student_id}
+                      className={`flex items-center gap-2.5 p-2 rounded-lg text-xs font-medium ${
+                        isMe ? 'bg-primary/10 border border-primary/30 text-primary' : 'hover:bg-secondary/30'
+                      }`}
+                    >
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${medal}`}>
+                        {i + 1}
+                      </span>
+                      <span className="flex-1 truncate">{row.name}{isMe && ' (you)'}</span>
+                      <span className="font-bold shrink-0">{row.total_xp} pts</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+
+          {/* Recent activity */}
+          <Card className="p-5">
+            <h2 className="font-semibold text-sm flex items-center gap-2 mb-4">
+              <Icon className="text-primary">history</Icon> Recent Activity
+            </h2>
+            {activity.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">No completed quizzes yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {activity.slice(0, 5).map((a, i) => {
+                  const score = a.score ?? 0
+                  const pill = score >= 80 ? 'bg-emerald-50 text-emerald-700' : score >= 60 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
+                  return (
+                    <div key={i} className="flex items-center justify-between gap-2 py-1.5 border-b border-border/40 last:border-0">
+                      <span className="text-xs text-foreground truncate font-medium flex-1">{a.quizzes?.topic || 'Quiz'}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${pill}`}>{score}%</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+
         </div>
       </div>
-    </div>
-  )
-}
-
-function StatHud({ icon, label, value, color }) {
-  return (
-    <div className="game-panel text-center py-4">
-      <p className="text-xl leading-none mb-1">{icon}</p>
-      <p className={`font-stat text-2xl font-bold ${color}`}>{value}</p>
-      <p className="text-[11px] text-white/40 mt-0.5 uppercase tracking-wide">{label}</p>
     </div>
   )
 }

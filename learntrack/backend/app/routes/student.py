@@ -18,10 +18,96 @@ class HelperQuestion(BaseModel):
     domain: str | None = None
 
 
+from datetime import datetime, timezone
+
 @router.post("/ask")
 def ask_helper(payload: HelperQuestion, user=Depends(require_student)):
+    # 1. Rate Limiting Check
+    today = datetime.now(timezone.utc).date()
+    
+    # Get current rate limit status
+    limit_resp = supabase.table("tutor_rate_limits").select("*").eq("student_id", user["id"]).execute()
+    limit_data = limit_resp.data[0] if limit_resp.data else None
+    
+    if not limit_data:
+        # Create record
+        supabase.table("tutor_rate_limits").insert({
+            "student_id": user["id"],
+            "messages_count": 0,
+            "last_reset_date": today.isoformat()
+        }).execute()
+        count = 0
+    else:
+        last_date = datetime.fromisoformat(limit_data["last_reset_date"]).date()
+        if last_date < today:
+            # Reset count for new day
+            supabase.table("tutor_rate_limits").update({
+                "messages_count": 0,
+                "last_reset_date": today.isoformat()
+            }).eq("student_id", user["id"]).execute()
+            count = 0
+        else:
+            count = limit_data["messages_count"]
+            
+    max_daily = 10
+    if count >= max_daily:
+        raise HTTPException(status_code=429, detail="Daily limit reached for Study Guide. Try again tomorrow!")
+        
+    # 2. Get Answer
     answer = answer_question(user["class_id"], payload.question, payload.domain)
-    return {"answer": answer}
+    
+    # 3. Update count
+    new_count = count + 1
+    supabase.table("tutor_rate_limits").update({
+        "messages_count": new_count
+    }).eq("student_id", user["id"]).execute()
+    
+    # 4. Persist history
+    supabase.table("tutor_chat_history").insert([
+        {"student_id": user["id"], "role": "user", "content": payload.question},
+        {"student_id": user["id"], "role": "assistant", "content": answer}
+    ]).execute()
+    
+    return {"answer": answer, "remaining": max_daily - new_count}
+
+
+@router.get("/chat-history")
+def get_chat_history(user=Depends(require_student)):
+    """Return chat history and remaining daily quota for the AI tutor."""
+    today = datetime.now(timezone.utc).date()
+    max_daily = 10
+
+    # Get remaining quota
+    limit_resp = supabase.table("tutor_rate_limits").select("*").eq("student_id", user["id"]).execute()
+    limit_data = limit_resp.data[0] if limit_resp.data else None
+
+    if not limit_data:
+        remaining = max_daily
+    else:
+        last_date = datetime.fromisoformat(limit_data["last_reset_date"]).date()
+        if last_date < today:
+            remaining = max_daily
+        else:
+            remaining = max(0, max_daily - limit_data["messages_count"])
+
+    # Get chat history
+    rows = (
+        supabase.table("tutor_chat_history")
+        .select("role, content, created_at")
+        .eq("student_id", user["id"])
+        .order("created_at")
+        .execute()
+        .data
+    )
+
+    history = [{"role": r["role"], "text": r["content"]} for r in rows] if rows else []
+
+    return {"history": history, "remaining": remaining}
+
+
+@router.get("/ask/history")
+def get_helper_history(user=Depends(require_student)):
+    return supabase.table("tutor_chat_history").select("*").eq("student_id", user["id"]).order("created_at").execute().data
 
 
 @router.get("/quizzes")

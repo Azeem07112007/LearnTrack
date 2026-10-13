@@ -11,22 +11,22 @@ import Profile from './pages/Profile'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import AppShell from './components/AppShell'
-import Loading from './components/Loading'
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
-// 'Dashboard' is no longer its own tab — it's the home page, reached via the
-// logo in the sidebar (like clicking a site's logo takes you home).
 const STUDENT_NAV = [
-  { key: 'roadmap', label: 'Quest Path', icon: '🗺' },
-  { key: 'quiz', label: 'Quests', icon: '⚔' },
-  { key: 'helper', label: 'Ask a Tutor', icon: '🧙' },
-  { key: 'leaderboard', label: 'Leaderboard', icon: '🏆' },
-  { key: 'profile', label: 'Profile', icon: '🧑' },
+  { key: 'dashboard', label: 'Dashboard', icon: 'home' },
+  { key: 'quiz', label: 'Quizzes', icon: 'quiz' },
+  { key: 'roadmap', label: 'Learning Path', icon: 'route' },
+  { key: 'leaderboard', label: 'Leaderboard', icon: 'leaderboard' },
+  { key: 'assignments', label: 'Assignments', icon: 'assignment' },
+  { key: 'helper', label: 'Study Guide', icon: 'school' },
 ]
 
 const TEACHER_NAV = [
-  { key: 'profile', label: 'Profile', icon: '🧑' },
+  { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { key: 'assignments', label: 'Assignments', icon: 'assignment' },
+  { key: 'profile', label: 'Profile', icon: 'person' },
 ]
 
 export default function App() {
@@ -60,18 +60,26 @@ export default function App() {
           headers: { Authorization: `Bearer ${session.access_token}` },
         })
         if (!res.ok) {
-          setProfile({ role: 'no-profile' })
+          // 401 = invalid/expired token or no profile row in users table
+          if (res.status === 401) {
+            setProfile({ role: 'no-profile' })
+          } else {
+            // Other server errors (500, etc.) — backend is up but something else broke
+            setProfile({ role: 'error' })
+          }
           return
         }
         setProfile(await res.json())
       } catch {
-        setProfile({ role: 'no-profile' })
+        // Network error — backend is unreachable
+        setProfile({ role: 'error' })
       } finally {
         setLoading(false)
       }
     }
     loadProfile()
   }, [session, showSignup])
+
 
   if (showSignup) {
     return (
@@ -81,7 +89,14 @@ export default function App() {
       />
     )
   }
-  if (loading) return <Loading text="Loading LearnTrack..." />
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-sm">Loading LearnTrack…</span>
+      </div>
+    </div>
+  )
   if (!session) return <Login onShowSignup={() => setShowSignup(true)} />
 
   async function handleLogout() {
@@ -93,12 +108,52 @@ export default function App() {
 
   if (profile?.role === 'no-profile') {
     return (
-      <div className="p-6 text-center space-y-3 font-body min-h-screen flex flex-col items-center justify-center">
-        <p className="font-display text-xl text-white">Your account was created, but no profile was set up for it.</p>
-        <p className="text-sm text-white/60">This usually means signup was interrupted. Try signing up again, or contact whoever's managing the backend.</p>
-        <button onClick={handleLogout} className="text-sm text-white/50 underline">
-          Log out
-        </button>
+      <Signup
+        session={session}
+        onDone={async () => {
+          setLoading(true)
+          try {
+            const res = await fetch(`${API_BASE}/me`, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            })
+            if (res.ok) {
+              setProfile(await res.json())
+            }
+          } finally {
+            setLoading(false)
+          }
+        }}
+        onBackToLogin={handleLogout}
+      />
+    )
+  }
+
+  if (profile?.role === 'error') {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-foreground">
+        <div className="login-card" style={{ textAlign: 'center' }}>
+          <div className="brand-mark mx-auto mb-2" style={{ background: 'var(--danger)' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#fff' }}>cloud_off</span>
+          </div>
+          <h1 style={{ fontSize: 20, margin: '14px 0 6px' }}>Connection Error</h1>
+          <p className="text-muted-foreground text-sm" style={{ marginBottom: 20 }}>
+            Could not reach the LearnTrack server.<br />
+            Please make sure the backend is running and try again.
+          </p>
+          <button
+            className="btn btn-primary w-full"
+            onClick={() => { setProfile(null); setLoading(true); window.location.reload() }}
+          >
+            Try Again
+          </button>
+          <button
+            className="btn btn-ghost w-full"
+            style={{ marginTop: 8 }}
+            onClick={handleLogout}
+          >
+            Sign Out
+          </button>
+        </div>
       </div>
     )
   }
@@ -106,18 +161,20 @@ export default function App() {
   const isTeacher = profile?.role === 'teacher'
   const navItems = isTeacher ? TEACHER_NAV : STUDENT_NAV
   const pageTitles = {
-    dashboard: isTeacher ? 'Post Quest' : 'Home',
-    quiz: 'Quests',
+    dashboard: isTeacher ? 'Teacher Dashboard' : 'Dashboard',
+    quiz: 'Quizzes',
     leaderboard: 'Leaderboard',
-    roadmap: 'Quest Path',
-    helper: 'Ask a Tutor',
+    roadmap: 'Learning Path',
+    helper: 'Study Guide',
     profile: 'Profile',
+    assignments: 'Assignments',
   }
 
   let content
   if (view === 'profile') {
     content = <Profile profile={profile} onProfileUpdate={setProfile} />
   } else if (isTeacher) {
+    // Teacher-specific views
     content = <TeacherUpload />
   } else if (view === 'quiz') {
     content = <QuizPlayer onExit={() => setView('dashboard')} />
@@ -128,7 +185,7 @@ export default function App() {
   } else if (view === 'helper') {
     content = <HelperChat />
   } else {
-    content = <StudentDashboard onTakeQuiz={() => setView('quiz')} />
+    content = <StudentDashboard onTakeQuiz={() => setView('quiz')} onNavChange={setView} />
   }
 
   return (

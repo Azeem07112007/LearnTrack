@@ -1,15 +1,41 @@
-import { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import { Card, Pill, Button, Icon } from '../components/ui'
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
 export default function HelperChat() {
   const [messages, setMessages] = useState([
-    { role: 'assistant', text: "Hi! I'm your study companion 🧙 — ask me anything about what your teacher has posted, and I'll do my best to help." },
+    { role: 'assistant', text: "Hi! I'm your AI Study Companion. Ask me anything based on the learning materials uploaded by your teacher!" },
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [remainingQuota, setRemainingQuota] = useState(null)
   const bottomRef = useRef(null)
+
+  useEffect(() => {
+    async function fetchHistory() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) return
+        const res = await fetch(`${API_BASE}/student/chat-history`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data.history) && data.history.length > 0) {
+            setMessages(data.history)
+          }
+          if (data.remaining !== undefined) {
+            setRemainingQuota(data.remaining)
+          }
+        }
+      } catch {
+        // Fallback to initial message
+      }
+    }
+    fetchHistory()
+  }, [])
 
   async function send(e) {
     e.preventDefault()
@@ -33,8 +59,11 @@ export default function HelperChat() {
       const data = await res.json()
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', text: res.ok ? data.answer : "Something went wrong — try asking again." },
+        { role: 'assistant', text: res.ok ? data.answer : (data.detail || "Something went wrong — try asking again.") },
       ])
+      if (data.remaining !== undefined) {
+        setRemainingQuota(data.remaining)
+      }
     } catch {
       setMessages((prev) => [...prev, { role: 'assistant', text: "Couldn't reach the helper right now. Try again in a moment." }])
     } finally {
@@ -44,50 +73,76 @@ export default function HelperChat() {
   }
 
   return (
-    <div className="game-panel p-6 flex flex-col h-[70vh]">
-      <p className="font-display text-2xl text-white mb-1">🧙 Ask your study companion</p>
-      <p className="text-white/40 text-sm font-body mb-4">Answers only from what your teacher has uploaded for your class.</p>
-
-      <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div
-              className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm font-body ${
-                m.role === 'user'
-                  ? 'bg-gradient-to-r from-cyan to-violet text-white'
-                  : 'bg-night2 border border-violet/40 text-white/85'
-              }`}
-            >
-              {m.text}
+    <div className="max-w-4xl mx-auto space-y-4">
+      <Card className="p-6 flex flex-col h-[calc(100vh-220px)] min-h-[500px]">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-border/50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Icon className="text-xl">auto_awesome</Icon>
+            </div>
+            <div>
+              <h2 className="text-lg font-bold">Ask AI Tutor</h2>
+              <p className="text-xs text-muted-foreground">Context-aware answers from your course syllabus</p>
             </div>
           </div>
-        ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-night2 border border-violet/40 rounded-xl px-4 py-2.5 text-sm text-white/50 font-body">
-              Thinking...
-            </div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
+          {remainingQuota !== null && (
+            <Pill variant="secondary" className="text-xs">
+              <Icon className="text-xs mr-1">bolt</Icon> {remainingQuota} questions left today
+            </Pill>
+          )}
+        </div>
 
-      <form onSubmit={send} className="flex gap-2 mt-4">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about your last quest..."
-          className="flex-1 border border-violet/50 rounded-lg p-2.5 bg-night2 text-white placeholder-white/30 font-body"
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-gradient-to-r from-cyan to-violet disabled:opacity-40 text-white rounded-lg px-5 font-display"
-        >
-          Ask
-        </button>
-      </form>
+        {/* Message Thread */}
+        <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+          {messages.map((m, i) => (
+            <div key={i} className={`flex gap-3 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {m.role !== 'user' && (
+                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-sm font-bold">
+                  <Icon className="text-base">auto_awesome</Icon>
+                </div>
+              )}
+              <div
+                className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm font-medium leading-relaxed ${
+                  m.role === 'user'
+                    ? 'bg-primary text-primary-foreground rounded-br-xs'
+                    : 'bg-secondary/40 text-foreground border border-border/40 rounded-bl-xs'
+                }`}
+              >
+                {m.text}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex gap-3 justify-start">
+              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-sm font-bold animate-pulse">
+                <Icon className="text-base">auto_awesome</Icon>
+              </div>
+              <div className="bg-secondary/40 border border-border/40 rounded-2xl rounded-bl-xs px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+                Searching learning materials...
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Input Bar */}
+        <form onSubmit={send} className="flex gap-2 pt-4 border-t border-border/50">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask a question about your course..."
+            className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 text-sm outline-none focus:border-primary transition-all text-foreground"
+          />
+          <Button type="submit" disabled={loading || !input.trim()}>
+            <Icon>send</Icon> Ask
+          </Button>
+        </form>
+      </Card>
     </div>
   )
 }
+

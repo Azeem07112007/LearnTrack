@@ -1,6 +1,7 @@
 import shutil
 import tempfile
 from fastapi import APIRouter, Depends, UploadFile, Form, HTTPException
+from pydantic import BaseModel
 from app.db import supabase
 from app.auth import require_teacher
 from app.services.content_pipeline import generate_quiz_from_file
@@ -8,21 +9,28 @@ from app.services.content_pipeline import generate_quiz_from_file
 router = APIRouter(prefix="/teacher", tags=["teacher"])
 
 
+class CreateClassRequest(BaseModel):
+    name: str
+
+
 @router.get("/stats")
 def teacher_stats(user=Depends(require_teacher)):
-    classes = supabase.table("classes").select("id").eq("school_id", user["school_id"]).execute().data
-    class_ids = [c["id"] for c in classes]
+    classes = supabase.table("classes").select("id, name, school_id").execute().data
+    seen = set()
+    unique_classes = []
+    for c in classes:
+        if c["name"] not in seen:
+            seen.add(c["name"])
+            unique_classes.append(c)
 
-    students = (
-        supabase.table("users").select("id").eq("school_id", user["school_id"]).eq("role", "student").execute().data
-        if class_ids else []
-    )
+    students = supabase.table("users").select("id").eq("role", "student").execute().data
+    class_ids = [c["id"] for c in classes]
     quizzes = (
         supabase.table("quizzes").select("id").in_("class_id", class_ids).execute().data
         if class_ids else []
     )
     return {
-        "total_classes": len(class_ids),
+        "total_classes": len(unique_classes),
         "total_students": len(students),
         "total_quests": len(quizzes),
     }
@@ -30,21 +38,70 @@ def teacher_stats(user=Depends(require_teacher)):
 
 @router.get("/classes")
 def list_classes(user=Depends(require_teacher)):
-    return (
+    classes = (
         supabase.table("classes")
-        .select("id, name")
-        .eq("school_id", user["school_id"])
+        .select("id, name, school_id")
+        .order("name")
         .execute()
         .data
     )
+    school_id = user.get("school_id")
+    if school_id:
+        classes.sort(key=lambda c: (0 if c.get("school_id") == school_id else 1, c["name"]))
+
+    seen = set()
+    unique_classes = []
+    for c in classes:
+        if c["name"] not in seen:
+            seen.add(c["name"])
+            unique_classes.append(c)
+
+    # Sort naturally (e.g. 9-A, 9-B, 10-A, ...)
+    try:
+        unique_classes.sort(key=lambda c: (int(c["name"].split("-")[0]) if "-" in c["name"] and c["name"].split("-")[0].isdigit() else 999, c["name"]))
+    except Exception:
+        unique_classes.sort(key=lambda c: c["name"])
+
+    return unique_classes
+
+
+@router.post("/classes")
+def create_class(payload: CreateClassRequest, user=Depends(require_teacher)):
+    school_id = user.get("school_id")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Class name is required")
+
+    existing = (
+        supabase.table("classes")
+        .select("id, name, school_id")
+        .eq("name", name)
+        .execute()
+        .data
+    )
+    if existing:
+        return existing[0]
+
+    insert_data = {"name": name}
+    if school_id:
+        insert_data["school_id"] = school_id
+
+    res = (
+        supabase.table("classes")
+        .insert(insert_data)
+        .execute()
+        .data
+    )
+    if not res:
+        raise HTTPException(status_code=500, detail="Failed to create class")
+    return res[0]
 
 
 @router.get("/leaderboard/{class_id}")
 def class_leaderboard(class_id: str, user=Depends(require_teacher)):
-    # Make sure this class actually belongs to the teacher's school before showing it
-    cls = supabase.table("classes").select("id").eq("id", class_id).eq("school_id", user["school_id"]).execute().data
+    cls = supabase.table("classes").select("id").eq("id", class_id).execute().data
     if not cls:
-        raise HTTPException(status_code=404, detail="Class not found in your school")
+        raise HTTPException(status_code=404, detail="Class not found")
     return (
         supabase.table("leaderboard")
         .select("*")

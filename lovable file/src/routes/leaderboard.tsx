@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { LeaderboardPage } from "../components/learntrack/pages";
+export const Route=createFileRoute("/leaderboard")({head:()=>({meta:[{title:"Academic Leaderboard — LearnTrack"},{name:"description",content:"Compare verified academic performance across the CS301 cohort."},{property:"og:title",content:"Academic Leaderboard — LearnTrack"},{property:"og:description",content:"Compare verified academic performance across the CS301 cohort."},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"}]}),component:LeaderboardPage});

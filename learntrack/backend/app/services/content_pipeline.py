@@ -1,15 +1,12 @@
 import os
 import json
 from groq import Groq
-from paddleocr import PaddleOCR
 
 groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
-print("DEBUG GROQ KEY:", repr(os.environ.get("GROQ_API_KEY")))
-import pytesseract
-from pdf2image import convert_from_path
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-POPPLER_PATH = r"C:\Users\Azeem\Downloads\Release-26.02.0-0\poppler-26.02.0\Library\bin"  # update to your actual extracted path
+TESSERACT_CMD = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+POPPLER_PATH = r"C:\Users\Azeem\Downloads\Release-26.02.0-0\poppler-26.02.0\Library\bin"
+
 
 QUIZ_PROMPT = """You are a quiz generator for school students.
 Given the following text, generate 5 multiple-choice questions.
@@ -23,13 +20,31 @@ Text:
 """
 
 def extract_text(file_path: str) -> str:
-    if file_path.lower().endswith(".pdf"):
+    import pytesseract
+    from pdf2image import convert_from_path
+    from PIL import Image
+
+    pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+
+    path_lower = file_path.lower()
+    if path_lower.endswith(".pdf"):
         pages = convert_from_path(file_path, poppler_path=POPPLER_PATH)
-        text = "\n".join(pytesseract.image_to_string(page) for page in pages)
+        return "\n".join(pytesseract.image_to_string(page) for page in pages)
+    elif path_lower.endswith((".txt", ".md", ".csv")):
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read()
     else:
-        from PIL import Image
-        text = pytesseract.image_to_string(Image.open(file_path))
-    return text
+        try:
+            image = Image.open(file_path)
+            return pytesseract.image_to_string(image)
+        except Exception:
+            # Fallback: try raw text read
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    return f.read()
+            except Exception:
+                return ""
+
 
 
 

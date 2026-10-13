@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from app.routes import student, teacher, auth as auth_routes
+from app.routes import student, teacher, auth as auth_routes, assignments
 from app.auth import get_current_user
 from app.db import supabase
 
@@ -17,6 +17,7 @@ app.add_middleware(
 app.include_router(student.router)
 app.include_router(teacher.router)
 app.include_router(auth_routes.router)
+app.include_router(assignments.router)
 
 
 @app.get("/")

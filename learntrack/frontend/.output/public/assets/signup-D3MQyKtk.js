@@ -1,0 +1,1 @@
+import{o as e}from"./pages-BBpgNqH2.js";var t=e;export{t as component};

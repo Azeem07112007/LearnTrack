@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { DashboardPage } from "../components/learntrack/app";
+export const Route=createFileRoute("/")({head:()=>({meta:[{title:"Student Dashboard — LearnTrack"},{name:"description",content:"Monitor academic performance, deadlines, evaluations, and study activity."},{property:"og:title",content:"Student Dashboard — LearnTrack"},{property:"og:description",content:"Monitor academic performance, deadlines, evaluations, and study activity."},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"}]}),component:DashboardPage});

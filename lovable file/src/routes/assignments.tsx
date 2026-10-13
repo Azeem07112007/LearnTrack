@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { AssignmentsPage } from "../components/learntrack/pages";
+export const Route=createFileRoute("/assignments")({head:()=>({meta:[{title:"Course Assignments — LearnTrack"},{name:"description",content:"Review, prepare, and submit active course deliverables."},{property:"og:title",content:"Course Assignments — LearnTrack"},{property:"og:description",content:"Review, prepare, and submit active course deliverables."},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"}]}),component:AssignmentsPage});

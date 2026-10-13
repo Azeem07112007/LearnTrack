@@ -8,8 +8,6 @@ numpy
 scikit-learn
 groq
 google-generativeai
-paddleocr
 chromadb
 sentence-transformers
 python-multipart
-paddlepaddle

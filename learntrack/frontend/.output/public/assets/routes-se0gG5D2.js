@@ -1,0 +1,1 @@
+import{n as e}from"./app-BMHj_yWA.js";var t=e;export{t as component};

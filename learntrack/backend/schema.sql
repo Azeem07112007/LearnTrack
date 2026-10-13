@@ -92,7 +92,6 @@ create table student_badges (
   primary key (student_id, badge_id)
 );
 
--- ============ INDEXES ============
 
 create index idx_quiz_attempts_student on quiz_attempts(student_id);
 create index idx_quiz_attempts_quiz on quiz_attempts(quiz_id);
@@ -101,7 +100,6 @@ create index idx_users_class on users(class_id);
 create index idx_quizzes_class_domain on quizzes(class_id, domain);
 create index idx_content_class_domain on content(class_id, domain);
 
--- ============ LEADERBOARD (materialized view) ============
 
 create materialized view leaderboard as
 select
@@ -116,11 +114,6 @@ group by u.id, u.name, u.class_id
 order by total_xp desc;
 
 create unique index idx_leaderboard_student on leaderboard(student_id);
-
--- Refresh this on a schedule (cron / Supabase Edge Function), e.g. every 5 minutes:
--- refresh materialized view concurrently leaderboard;
-
--- ============ ROW LEVEL SECURITY ============
 
 alter table quiz_attempts enable row level security;
 alter table xp_ledger enable row level security;

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../supabaseClient'
 import Loading from '../components/Loading'
+import { Card, Pill, Icon } from '../components/ui'
 
 const API_BASE = import.meta.env.VITE_API_BASE
 
@@ -30,10 +31,13 @@ export default function Roadmap() {
 
   if (path.length === 0) {
     return (
-      <div className="game-panel p-8 text-center">
-        <p className="font-display text-xl text-white mb-2">🗺 No quests posted yet</p>
-        <p className="text-white/50 text-sm font-body">Once your teacher assigns a quest, it'll appear here as the start of your path.</p>
-      </div>
+      <Card className="p-8 text-center max-w-md mx-auto my-12">
+        <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
+          <Icon className="text-2xl">map</Icon>
+        </div>
+        <h3 className="font-semibold text-lg mb-1">No assignments yet</h3>
+        <p className="text-muted-foreground text-sm">Once your teacher posts an assignment, it will appear here as your learning path.</p>
+      </Card>
     )
   }
 
@@ -55,68 +59,82 @@ export default function Roadmap() {
   }
 
   return (
-    <div className="game-panel p-8">
-      <p className="font-display text-2xl text-white mb-2">🗺 Your quest path</p>
-      <p className="text-white/50 text-sm font-body mb-6">Follow the trail — each stop is a quest waiting to be completed.</p>
+    <div className="space-y-6">
+      <Card className="p-6">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Icon className="text-xl">map</Icon>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Learning Path</h2>
+            <p className="text-sm text-muted-foreground">Follow your assignments in sequence</p>
+          </div>
+        </div>
 
-      <div className="relative mx-auto" style={{ width: centerX * 2, height: totalHeight }}>
-        <svg width={centerX * 2} height={totalHeight} className="absolute top-0 left-0">
-          <motion.path
-            d={d}
-            fill="none"
-            stroke="#5B4B8A"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeDasharray="1 14"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 1.2, ease: 'easeInOut' }}
-          />
-        </svg>
+        <div className="relative mx-auto mt-8" style={{ width: centerX * 2, height: totalHeight }}>
+          <svg width={centerX * 2} height={totalHeight} className="absolute top-0 left-0">
+            <motion.path
+              d={d}
+              fill="none"
+              stroke="currentColor"
+              className="text-border"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray="6 8"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 1.2, ease: 'easeInOut' }}
+            />
+          </svg>
 
-        {points.map((q, i) => {
-          const isCompleted = q.status === 'completed'
-          const isCurrent = q.status === 'current'
-          const labelRight = q.x > centerX
+          {points.map((q, i) => {
+            const isCompleted = q.status === 'completed'
+            const isCurrent = q.status === 'current'
+            const labelRight = q.x > centerX
 
-          return (
-            <motion.div
-              key={q.id}
-              className="absolute flex items-center gap-3"
-              style={{
-                left: q.x,
-                top: q.y,
-                transform: labelRight ? 'translate(-100%, -50%)' : 'translate(0%, -50%)',
-                flexDirection: labelRight ? 'row-reverse' : 'row',
-              }}
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 + i * 0.12, type: 'spring', stiffness: 300, damping: 18 }}
-            >
+            return (
               <motion.div
-                whileHover={{ scale: 1.12 }}
-                animate={isCurrent ? { boxShadow: ['0 0 0px #28C2C2', '0 0 22px #28C2C2', '0 0 0px #28C2C2'] } : {}}
-                transition={isCurrent ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' } : { type: 'spring', stiffness: 300 }}
-                className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-stat font-bold shrink-0 border-4 z-10 ${
-                  isCompleted
-                    ? 'bg-gradient-to-br from-gold to-amber-600 border-white/30 text-night'
-                    : isCurrent
-                    ? 'bg-gradient-to-br from-cyan to-violet border-white/40 text-white'
-                    : 'bg-night2 border-violet/30 text-white/30'
-                }`}
+                key={q.id}
+                className="absolute flex items-center gap-3"
+                style={{
+                  left: q.x,
+                  top: q.y,
+                  transform: labelRight ? 'translate(-100%, -50%)' : 'translate(0%, -50%)',
+                  flexDirection: labelRight ? 'row-reverse' : 'row',
+                }}
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 + i * 0.1, type: 'spring', stiffness: 300, damping: 20 }}
               >
-                {isCompleted ? '⭐' : isCurrent ? '⚔' : '🔒'}
+                <motion.div
+                  whileHover={{ scale: 1.1 }}
+                  animate={isCurrent ? { boxShadow: ['0 0 0px hsl(var(--primary))', '0 0 16px hsl(var(--primary))', '0 0 0px hsl(var(--primary))'] } : {}}
+                  transition={isCurrent ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : { type: 'spring' }}
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 border-2 z-10 transition-all ${
+                    isCompleted
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-500'
+                      : isCurrent
+                      ? 'bg-primary text-primary-foreground border-primary shadow-lg'
+                      : 'bg-muted border-border text-muted-foreground'
+                  }`}
+                >
+                  <Icon>{isCompleted ? 'star' : isCurrent ? 'play_arrow' : 'lock'}</Icon>
+                </motion.div>
+                <div className={labelRight ? 'text-right' : 'text-left'} style={{ maxWidth: 180 }}>
+                  <p className={`font-semibold text-sm leading-snug ${isCurrent ? 'text-primary font-bold' : isCompleted ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    {q.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {q.domain}
+                    {isCompleted && <span className="text-amber-500 font-semibold ml-1">({q.score} XP)</span>}
+                  </p>
+                </div>
               </motion.div>
-              <div className={labelRight ? 'text-right' : 'text-left'} style={{ maxWidth: 160 }}>
-                <p className={`font-display leading-tight ${isCurrent ? 'text-cyan' : isCompleted ? 'text-gold' : 'text-white/40'}`}>
-                  {q.title}
-                </p>
-                <p className="text-xs text-white/40">{q.domain}{isCompleted ? ` · scored ${q.score}` : ''}</p>
-              </div>
-            </motion.div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      </Card>
     </div>
   )
 }
+
